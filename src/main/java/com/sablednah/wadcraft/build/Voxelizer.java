@@ -293,10 +293,12 @@ public final class Voxelizer {
         runs.add(f - 1, f - 1, flat(map.sectors().get(s).floorFlat()));
 
         int airTop = c - 1;
-        // Only where it sits above head height: a light block is passable, but a
-        // two-high corridor with one at eye level is not something to walk into.
-        boolean lightHere = options.lights() && Math.floorMod(i, 4) == 2 && Math.floorMod(j, 4) == 2 && c - f >= 3;
-        int level = Math.min(15, Math.round(map.sectors().get(s).light() / 17f));
+        // In the top air block. A light block has no collision and cannot be seen,
+        // so even at eye level in a two-high corridor it is never in the way.
+        boolean lightHere = options.lights() && Math.floorMod(i, 4) == 2 && Math.floorMod(j, 4) == 2 && c - f >= 2;
+        // Doom's 0-255 onto 0-15, a little bright: Minecraft light falls off
+        // between sources where Doom's is flat across a sector.
+        int level = Math.min(15, Math.round(map.sectors().get(s).light() / 15f));
         if (lightHere && level > 0) {
             runs.add(f, airTop - 1, Material.AIR);
             runs.add(airTop, airTop, light(level));

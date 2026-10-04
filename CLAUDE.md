@@ -67,8 +67,11 @@ real WADs without a game, and what keeps a version port to the `neoforge` side.
 - **Doors are built open** (ceiling to lowest neighbouring ceiling - 4, as the
   engine opens them). Door specials: Doom local/tagged lists and Hexen 11/12/13
   in `Voxelizer`.
-- **Light blocks only in rooms 3+ high**, above head height. In a 2-high room
-  a light at eye level is in the way (it failed the shareware E1M1 start).
+- **Light blocks go in the top air block of every room 2+ high**, every 4th
+  column. A light block has no collision and is invisible, so eye level is fine.
+  (A first version kept them out of 2-high rooms after a test "failed" on the
+  shareware E1M1 start. The test was wrong: it counted a light block as solid.
+  E1M1's 2-high start room was then pitch dark in game.)
 - **Colours come from the WAD**, matched to blocks by redmean distance;
   `config/wadcraft/blocks.json` overrides by name. A bare PWAD borrows an IWAD
   from the folder of the same style (ExMy vs MAPxx).

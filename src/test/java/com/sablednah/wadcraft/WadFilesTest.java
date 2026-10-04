@@ -61,8 +61,8 @@ class WadFilesTest {
         assertTrue(map.playerStart().isPresent(), "E1M1 has a player start");
         VoxelModel model = Voxelizer.build(map, BuildOptions.defaults());
         int[] origin = model.column(model.originI(), model.originJ());
-        assertTrue(hasAirAt(origin, model.originY()), "the player starts standing in air");
-        assertTrue(hasAirAt(origin, model.originY() + 1), "with headroom");
+        assertTrue(hasAirAt(model, origin, model.originY()), "the player starts standing in air");
+        assertTrue(hasAirAt(model, origin, model.originY() + 1), "with headroom");
         render(model, "freedoom1-E1M1");
     }
 
@@ -76,7 +76,7 @@ class WadFilesTest {
         int[] origin = model.column(model.originI(), model.originJ());
         System.out.println("doom1 start " + map.playerStart().get() + " origin column " + java.util.Arrays.toString(origin)
                 + " originY " + model.originY());
-        assertTrue(hasAirAt(origin, model.originY()) && hasAirAt(origin, model.originY() + 1));
+        assertTrue(hasAirAt(model, origin, model.originY()) && hasAirAt(model, origin, model.originY() + 1));
     }
 
     /** Every binary map in every WAD present reads and builds without throwing. */
@@ -123,9 +123,13 @@ class WadFilesTest {
         render(model, "hexen-" + first.name());
     }
 
-    private static boolean hasAirAt(int[] runs, int y) {
+    /** Air or a light block: both can be walked through. */
+    private static boolean hasAirAt(VoxelModel model, int[] runs, int y) {
         for (int r = 0; r < runs.length; r += 3) {
-            if (y >= runs[r] && y <= runs[r + 1]) return runs[r + 2] == 0;
+            if (y >= runs[r] && y <= runs[r + 1]) {
+                Material.Kind kind = model.materials().get(runs[r + 2]).kind();
+                return kind == Material.Kind.AIR || kind == Material.Kind.LIGHT;
+            }
         }
         return false;
     }
