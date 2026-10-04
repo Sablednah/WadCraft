@@ -58,7 +58,19 @@ public final class Voxelizer {
     private boolean[] sky;       // per sector
     private boolean[] halfStep;  // per sector: the floor surface is half a block up (a slab)
     private boolean[] hazard;    // per sector: a damaging floor (nukage, slime, lava)
+    private boolean[] lift;      // per sector: a lift, built raised as Doom stores it
+    private int[] doomFloor, doomCeil; // per sector, Doom units, doors already opened
+    private int[] colCeil;       // per column: its ceiling block, after lintel clearance
+    private int[] skyTop;        // per column: top air block if open to the sky, else MIN_VALUE
     private LineIndex lineIndex;
+
+    /** How far an outdoor area's tallest sky reaches out to raise the walls around it. */
+    private static final int SKY_WALL_RADIUS = 24;
+
+    /** Doom lifts: W1, S1, SR, WR, and the turbo four. Lowered by tag. */
+    private static final Set<Integer> DOOM_LIFTS = Set.of(10, 21, 62, 88, 120, 121, 122, 123);
+    /** Hexen: Plat_DownWaitUpStay. */
+    private static final Set<Integer> HEXEN_LIFTS = Set.of(62);
 
     private final List<Material> materials = new ArrayList<>();
     private final Map<Material, Integer> materialIds = new HashMap<>();
@@ -79,6 +91,8 @@ public final class Voxelizer {
         sectorHeights();
         classifyColumns();
         lineIndex = new LineIndex(map, minX, minY, scale);
+        thinWalls();
+        columnCeilings();
 
         int[][] columns = new int[width * depth][];
         long blocks = 0;
@@ -104,7 +118,7 @@ public final class Voxelizer {
             for (int s = 0; s < map.sectors().size(); s++) originY = Math.min(originY, floorY[s]);
         }
         return new VoxelModel(map.name(), width, depth, originI, originJ, originY, startAngle,
-                List.copyOf(materials), columns, blocks);
+                List.copyOf(materials), columns, sectorOf.clone(), blocks);
     }
 
     // --- grid ---
@@ -163,6 +177,9 @@ public final class Voxelizer {
             ceilings[s] = sectors.get(s).ceiling();
         }
         if (options.openDoors()) openDoors(floors, ceilings);
+        doomFloor = floors;
+        doomCeil = ceilings;
+        lift = findLifts();
 
         floorY = new int[n];
         ceilY = new int[n];
@@ -190,6 +207,81 @@ public final class Voxelizer {
             }
             sky[s] = sectors.get(s).ceilingFlat().startsWith("F_SKY");
         }
+    }
+
+    /** Sectors a lift special lowers, found by tag (Hexen: by its first argument). */
+    private boolean[] findLifts() {
+        boolean hexen = map.format() == WadFile.MapFormat.HEXEN;
+        Set<Integer> tags = new java.util.HashSet<>();
+        for (LineDef line : map.lines()) {
+            if ((hexen ? HEXEN_LIFTS : DOOM_LIFTS).contains(line.special()) && line.tag() != 0) tags.add(line.tag());
+        }
+        boolean[] lifts = new boolean[map.sectors().size()];
+        for (int s = 0; s < lifts.length; s++) lifts[s] = tags.contains(map.sectors().get(s).tag());
+        return lifts;
+    }
+
+    /** Could a Doom player walk from sector a into sector b? 56 units of opening, a step of 24 at most. */
+    private boolean doomPassable(int a, int b) {
+        int open = Math.min(doomCeil[a], doomCeil[b]) - Math.max(doomFloor[a], doomFloor[b]);
+        return open >= DOOM_PLAYER_HEIGHT && Math.abs(doomFloor[a] - doomFloor[b]) <= 24;
+    }
+
+    /**
+     * Each column's ceiling, raised where it has to be for someone to walk in.
+     *
+     * <p>Rounding is per sector, but walking is between them. A doorway can be
+     * 56 units high in Doom, exactly enough, and still come out a block and a
+     * half above the higher of the two floors once each side is rounded on its
+     * own; a player on the high side then cannot duck under the lintel. So the
+     * edge column of the lower ceiling is raised until there is room to stand on
+     * either floor beneath it. Found in E1M2, by a test that walks every
+     * opening.</p>
+     */
+    private void columnCeilings() {
+        colCeil = new int[width * depth];
+        skyTop = new int[width * depth];
+        java.util.Arrays.fill(skyTop, Integer.MIN_VALUE);
+        for (int j = 0; j < depth; j++) {
+            for (int i = 0; i < width; i++) {
+                int k = j * width + i, s = sectorOf[k];
+                if (s < 0) continue;
+                int c = ceilY[s];
+                if (c > floorY[s]) {
+                    // Corners too: a doorway's edge can run diagonally, and a
+                    // player cutting the corner meets the column it touches.
+                    for (int[] d : NEIGHBOURS_8) {
+                        int n = sectorAt(i + d[0], j + d[1]);
+                        if (n < 0 || n == s || !doomPassable(s, n)) continue;
+                        int standHalves = Math.max(surface(s), surface(n));
+                        c = Math.max(c, Math.floorDiv(standHalves + 4 + 1, 2)); // 2 blocks of headroom
+                    }
+                }
+                colCeil[k] = c;
+                if (sky[s]) skyTop[k] = c - 1;
+            }
+        }
+    }
+
+    private int colCeilAt(int i, int j) {
+        return colCeil[j * width + i];
+    }
+
+    /**
+     * The tallest sky within reach of a wall column. Doom never draws a wall
+     * between two sky ceilings of different heights: it paints sky above the
+     * lower one, so an outdoor area looks walled in by sky. Minecraft's sky is
+     * the world, so the walls around outdoor areas are raised to the tallest sky
+     * nearby, or the player sees straight out over them.
+     */
+    private int nearbySkyTop(int i, int j) {
+        int best = Integer.MIN_VALUE;
+        for (int y = Math.max(0, j - SKY_WALL_RADIUS); y <= Math.min(depth - 1, j + SKY_WALL_RADIUS); y++) {
+            for (int x = Math.max(0, i - SKY_WALL_RADIUS); x <= Math.min(width - 1, i + SKY_WALL_RADIUS); x++) {
+                best = Math.max(best, skyTop[y * width + x]);
+            }
+        }
+        return best;
     }
 
     /**
@@ -225,6 +317,10 @@ public final class Voxelizer {
         }
         return found;
     }
+
+    /** A ladder faces away from the block it hangs on: a lift to the east means facing west. */
+    private static final int[] LADDER_FACING = {Material.FACING_WEST, Material.FACING_EAST,
+            Material.FACING_NORTH, Material.FACING_SOUTH};
 
     /** NEIGHBOURS_4's directions as Material facings: east, west, south, north. */
     private static final int[] FACING_OF = {Material.FACING_EAST, Material.FACING_WEST,
@@ -313,6 +409,39 @@ public final class Voxelizer {
         }
     }
 
+    /**
+     * Walls thinner than a column.
+     *
+     * <p>Doom draws a wall between two rooms as two one-sided lines back to
+     * back, often 8 or 16 units apart and sometimes touching. Each column takes
+     * the sector at its centre, so a wall that falls between two centres simply
+     * vanishes and the rooms run into each other, and a thin pillar disappears.
+     * So wherever the segment joining two neighbouring centres crosses a
+     * one-sided line, the column nearer that line becomes wall. Thin walls come
+     * out a block thick; what Doom drew as solid stays solid.</p>
+     */
+    private void thinWalls() {
+        IntPredicate solid = idx -> !map.lines().get(idx).twoSided();
+        for (int j = 0; j < depth; j++) {
+            for (int i = 0; i < width; i++) {
+                for (int[] d : new int[][] {{1, 0}, {0, 1}}) {
+                    int ni = i + d[0], nj = j + d[1];
+                    if (ni >= width || nj >= depth) continue;
+                    int k = j * width + i, nk = nj * width + ni;
+                    if (sectorOf[k] < 0 || sectorOf[nk] < 0) continue;
+                    double ax = centreX(i), ay = centreY(j), bx = centreX(ni), by = centreY(nj);
+                    LineDef wall = lineIndex.crossing(ax, ay, bx, by, solid);
+                    if (wall == null) continue;
+                    if (lineIndex.distanceTo(wall, ax, ay) <= lineIndex.distanceTo(wall, bx, by)) {
+                        sectorOf[k] = -1;
+                    } else {
+                        sectorOf[nk] = -1;
+                    }
+                }
+            }
+        }
+    }
+
     private int sectorAt(int i, int j) {
         if (i < 0 || j < 0 || i >= width || j >= depth) return -1;
         return sectorOf[j * width + i];
@@ -332,23 +461,41 @@ public final class Voxelizer {
         if (s < 0) {
             // The void: a wall here if it borders the level.
             int lo = Integer.MAX_VALUE, hi = Integer.MIN_VALUE;
+            boolean bySky = false;
             for (int[] d : NEIGHBOURS_8) {
                 int n = sectorAt(i + d[0], j + d[1]);
                 if (n < 0) continue;
+                int nc = colCeilAt(i + d[0], j + d[1]);
                 lo = Math.min(lo, floorY[n] - 1);
-                hi = Math.max(hi, sky[n] ? ceilY[n] - 1 : ceilY[n]);
+                hi = Math.max(hi, sky[n] ? nc - 1 : nc);
+                bySky |= sky[n];
             }
+            if (bySky) hi = Math.max(hi, nearbySkyTop(i, j));
             if (lo <= hi) runs.add(lo, hi, wall(outerWallTexture(px, py)));
             return runs.toArray();
         }
 
-        int f = floorY[s], c = ceilY[s];
+        int f = floorY[s], c = colCeilAt(i, j);
         int lowest = f, highest = c;
-        for (int[] d : NEIGHBOURS_4) {
+        int ladderTop = Integer.MIN_VALUE, ladderFacing = Material.FACING_NONE;
+        for (int k = 0; k < NEIGHBOURS_4.length; k++) {
+            int[] d = NEIGHBOURS_4[k];
             int n = sectorAt(i + d[0], j + d[1]);
-            if (n < 0 || n == s) continue;
+            if (n < 0) continue;
+            int nc = colCeilAt(i + d[0], j + d[1]);
+            // A raised neighbouring column (a lintel cleared above) needs this
+            // one solid up to its height too, sector or not.
+            if (n == s) {
+                if (!sky[s]) highest = Math.max(highest, nc - 1);
+                continue;
+            }
             lowest = Math.min(lowest, floorY[n]);
-            if (!(sky[s] && sky[n])) highest = Math.max(highest, ceilY[n] - 1);
+            if (!(sky[s] && sky[n])) highest = Math.max(highest, nc - 1);
+            // A lift too high to step onto gets a ladder up its face, on this side.
+            if (lift[n] && !lift[s] && floorY[n] - floorY[s] >= 2 && floorY[n] - 1 > ladderTop) {
+                ladderTop = floorY[n] - 1;
+                ladderFacing = LADDER_FACING[k];
+            }
         }
 
         if (c <= f) {
@@ -375,6 +522,11 @@ public final class Voxelizer {
         }
 
         int airTop = c - 1;
+        if (ladderFacing != Material.FACING_NONE) {
+            int top = Math.min(ladderTop, airTop);
+            runs.add(f, top, new Material(Material.Kind.LADDER, "", ladderFacing));
+            f = top + 1;
+        }
         // In the top air block. A light block has no collision and cannot be seen,
         // so even at eye level in a two-high corridor it is never in the way.
         boolean lightHere = options.lights() && Math.floorMod(i, 4) == 2 && Math.floorMod(j, 4) == 2 && c - f >= 2;

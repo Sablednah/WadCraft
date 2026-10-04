@@ -77,6 +77,41 @@ final class LineIndex {
         return best;
     }
 
+    /** Does the segment (ax,ay)-(bx,by) cross a line passing {@code accept}? Returns it, or null. */
+    LineDef crossing(double ax, double ay, double bx, double by, IntPredicate accept) {
+        int x0 = bucket(Math.min(ax, bx) - minX), x1 = bucket(Math.max(ax, bx) - minX);
+        int y0 = bucket(Math.min(ay, by) - minY), y1 = bucket(Math.max(ay, by) - minY);
+        for (int bx2 = x0; bx2 <= x1; bx2++) {
+            for (int by2 = y0; by2 <= y1; by2++) {
+                List<Integer> list = buckets.get(key(bx2, by2));
+                if (list == null) continue;
+                for (int idx : list) {
+                    if (!accept.test(idx)) continue;
+                    LineDef l = map.lines().get(idx);
+                    Vertex p = map.vertices().get(l.v1()), q = map.vertices().get(l.v2());
+                    if (intersects(ax, ay, bx, by, p.x(), p.y(), q.x(), q.y())) return l;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static boolean intersects(double ax, double ay, double bx, double by,
+            double cx, double cy, double dx, double dy) {
+        double d1 = cross(cx, cy, dx, dy, ax, ay), d2 = cross(cx, cy, dx, dy, bx, by);
+        double d3 = cross(ax, ay, bx, by, cx, cy), d4 = cross(ax, ay, bx, by, dx, dy);
+        return ((d1 > 0) != (d2 > 0)) && ((d3 > 0) != (d4 > 0)) && d1 != 0 && d2 != 0;
+    }
+
+    private static double cross(double ax, double ay, double bx, double by, double px, double py) {
+        return (bx - ax) * (py - ay) - (by - ay) * (px - ax);
+    }
+
+    /** Distance from a point to a line, for choosing which side of a wall gives way. */
+    double distanceTo(LineDef line, double px, double py) {
+        return distance(line, px, py);
+    }
+
     private double distance(LineDef line, double px, double py) {
         Vertex a = map.vertices().get(line.v1()), b = map.vertices().get(line.v2());
         double dx = b.x() - a.x(), dy = b.y() - a.y();

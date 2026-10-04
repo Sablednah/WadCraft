@@ -8,11 +8,12 @@ package com.sablednah.wadcraft.build;
  * stair facing that way (north is -z, east is +x, as in Minecraft, before the
  * build is turned). {@code HAZARD} is a damaging
  * floor: level 0 where it is safe to be a liquid, 1 where it needs a solid
- * stand-in because a liquid would spill.</p>
+ * stand-in because a liquid would spill. {@code LADDER} hangs on a lift's face,
+ * its level the way it faces.</p>
  */
 public record Material(Kind kind, String name, int level) {
 
-    public enum Kind { AIR, WALL, FLAT, LIGHT, SLAB, HAZARD }
+    public enum Kind { AIR, WALL, FLAT, LIGHT, SLAB, HAZARD, LADDER }
 
     /** A wall whose texture could not be found: the block mapper's fallback. */
     public static final String UNKNOWN = "?";

@@ -45,13 +45,20 @@ All commands need operator permission (level 2).
   slime) is lava, in pools with solid ground under and around them. Where lava
   could run onto a lower floor, it is magma instead. Both blocks can be changed
   in `blocks.json` (`hazard_floor`, `hazard_floor_spill`).
+- **Lifts have ladders.** Doom stores a lift raised; it is built that way, with
+  a ladder up its face from the floor below.
+- **Walkable where Doom is.** Every opening a Doom player can walk through is
+  checked to have room for a Minecraft player, and walls thinner than a block
+  are built a block thick rather than lost.
+- **Outdoor areas are walled up to the sky**, where Doom would have painted sky
+  above a low wall.
 - **Nothing in a build can burn.** The automatic palette has no flammable
   blocks, because a lava pool beside a wooden floor would take the whole level
   down. An override can still choose wood.
 - **The level's lighting**, as invisible light blocks at each sector's brightness.
 - Builds are placed a slice per tick, so a big map does not freeze the server.
 
-Not yet: monsters and items, moving doors and lifts, UDMF (text-format) maps.
+Not yet: monsters and items, moving doors and lifts (lifts get ladders), UDMF (text-format) maps.
 
 ## WAD files and licences
 

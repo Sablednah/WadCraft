@@ -73,6 +73,7 @@ class WadFilesTest {
         DoomMap map = DoomMap.read(WadFile.read(path), "E1M1");
         VoxelModel model = Voxelizer.build(map, BuildOptions.defaults());
         render(model, "doom1-E1M1");
+        render(Voxelizer.build(DoomMap.read(WadFile.read(path), "E1M2"), BuildOptions.defaults()), "doom1-E1M2");
         int[] origin = model.column(model.originI(), model.originJ());
         System.out.println("doom1 start " + map.playerStart().get() + " origin column " + java.util.Arrays.toString(origin)
                 + " originY " + model.originY());
@@ -116,6 +117,100 @@ class WadFilesTest {
         assertTrue(stairs > 0, "a half step beside a higher floor is a stair");
         assertTrue(slabs > 0, "E1M1's small steps become slabs");
         assertTrue(liquid > 0, "E1M1's nukage becomes a liquid where it is enclosed");
+    }
+
+    /**
+     * Wherever a Doom player could walk from one sector into the next, a
+     * Minecraft player must be able to walk between those columns: two blocks of
+     * headroom above the higher floor, and a step of a block at most. Rounding
+     * each sector on its own broke this at E1M2's lintels until ceilings were
+     * cleared per column. Corners count: a diagonal edge is walked across them.
+     */
+    @Test
+    void everyDoomOpeningIsWalkable() throws IOException {
+        List<Path> wads = allWads();
+        assumeTrue(!wads.isEmpty(), "no WADs present");
+        int checked = 0;
+        List<String> blocked = new ArrayList<>();
+        for (Path path : wads) {
+            WadFile wad;
+            try {
+                wad = WadFile.read(path);
+            } catch (IOException damaged) {
+                continue;
+            }
+            for (WadFile.MapEntry entry : wad.maps()) {
+                if (entry.format() == WadFile.MapFormat.UDMF) continue;
+                DoomMap map = DoomMap.read(wad, entry.name());
+                VoxelModel model = Voxelizer.build(map, BuildOptions.defaults());
+                int found = 0;
+                for (int j = 0; j < model.depth(); j++) {
+                    for (int i = 0; i < model.width(); i++) {
+                        int a = model.sectors()[j * model.width() + i];
+                        if (a < 0) continue;
+                        for (int[] d : new int[][] {{1, 0}, {0, 1}, {1, 1}, {1, -1}}) {
+                            int ni = i + d[0], nj = j + d[1];
+                            if (ni < 0 || nj < 0 || ni >= model.width() || nj >= model.depth()) continue;
+                            int b = model.sectors()[nj * model.width() + ni];
+                            if (b < 0 || b == a || !doomPassable(map, a, b)) continue;
+                            int[] sa = standing(model, model.column(i, j)), sb = standing(model, model.column(ni, nj));
+                            if (sa == null || sb == null) continue; // a door left shut, or a lift
+                            checked++;
+                            int headroomHalves = Math.min(sa[1], sb[1]) * 2 - Math.max(sa[0], sb[0]);
+                            if (headroomHalves < 4 || Math.abs(sa[0] - sb[0]) > 2) {
+                                if (found++ == 0) {
+                                    blocked.add(String.format("%s %s sectors %d/%d: headroom %.1f, step %.1f",
+                                            path.getFileName(), entry.name(), a, b, headroomHalves / 2.0,
+                                            Math.abs(sa[0] - sb[0]) / 2.0));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        blocked.forEach(System.out::println);
+        System.out.println("walkable openings checked: " + checked + ", maps with a blocked one: " + blocked.size());
+        assertTrue(blocked.isEmpty(), blocked.size() + " map(s) have an opening Doom can walk and the build cannot");
+    }
+
+    private static boolean doomPassable(DoomMap map, int a, int b) {
+        var sa = map.sectors().get(a);
+        var sb = map.sectors().get(b);
+        int open = Math.min(sa.ceiling(), sb.ceiling()) - Math.max(sa.floor(), sb.floor());
+        // Doors are opened by the builder, so a shut door's sector is not judged here.
+        return open >= 56 && Math.abs(sa.floor() - sb.floor()) <= 24;
+    }
+
+    /** {standing surface in half blocks, first solid block above}, or null if the column has no space. */
+    private static int[] standing(VoxelModel model, int[] runs) {
+        for (int r = 0; r < runs.length; r += 3) {
+            Material.Kind kind = model.materials().get(runs[r + 2]).kind();
+            // A ladder at a lift's foot fills the bottom of the space, and is walked past.
+            if (kind == Material.Kind.LADDER) {
+                int bottom = runs[r];
+                int[] rest = standing(model, java.util.Arrays.copyOfRange(runs, r + 3, runs.length));
+                if (rest == null) return null;
+                Material below = at(model, runs, bottom - 1);
+                return new int[] {bottom * 2 - (below != null && below.kind() == Material.Kind.SLAB ? 1 : 0), rest[1]};
+            }
+            if (kind != Material.Kind.AIR) continue;
+            int surface = runs[r] * 2;
+            Material below = at(model, runs, runs[r] - 1);
+            if (below != null && below.kind() == Material.Kind.SLAB) surface--;
+            int top = runs[r + 1] + 1;
+            Material above = at(model, runs, top);
+            if (above != null && above.kind() == Material.Kind.LIGHT) top++;
+            return new int[] {surface, top};
+        }
+        return null;
+    }
+
+    private static Material at(VoxelModel model, int[] runs, int y) {
+        for (int r = 0; r < runs.length; r += 3) {
+            if (y >= runs[r] && y <= runs[r + 1]) return model.materials().get(runs[r + 2]);
+        }
+        return null;
     }
 
     private static Material at(VoxelModel model, int i, int j, int y) {

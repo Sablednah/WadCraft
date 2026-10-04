@@ -13,10 +13,11 @@ import java.util.List;
  * would.</p>
  *
  * @param startAngle player 1's facing in Doom degrees (0 east, 90 north)
+ * @param sectors    the Doom sector each column was built from, -1 outside the level
  * @param blocks     how many blocks placing this will set, air included
  */
 public record VoxelModel(String mapName, int width, int depth, int originI, int originJ, int originY,
-        int startAngle, List<Material> materials, int[][] columns, long blocks) {
+        int startAngle, List<Material> materials, int[][] columns, int[] sectors, long blocks) {
 
     public int[] column(int i, int j) {
         return columns[j * width + i];

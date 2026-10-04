@@ -25,6 +25,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.LightBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -234,6 +235,7 @@ public final class BlockPalette {
             case AIR -> Blocks.AIR.defaultBlockState();
             case LIGHT -> Blocks.LIGHT.defaultBlockState().setValue(LightBlock.LEVEL, Math.max(0, Math.min(15, m.level())));
             case HAZARD -> m.level() == 0 ? hazard : hazardSolid;
+            case LADDER -> Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING, facing(m.level()));
             case WALL, FLAT -> full(m, colours);
             case SLAB -> {
                 // The slab of the block this floor would have been, if it has one.
@@ -246,14 +248,17 @@ public final class BlockPalette {
                 // A stair facing up the step, in the same stone, when it has stairs.
                 BlockState stairs = m.level() == Material.FACING_NONE ? null : stairsOf.get(slab.getBlock());
                 if (stairs == null) yield slab;
-                Direction facing = switch (m.level()) {
-                    case Material.FACING_NORTH -> Direction.NORTH;
-                    case Material.FACING_SOUTH -> Direction.SOUTH;
-                    case Material.FACING_WEST -> Direction.WEST;
-                    default -> Direction.EAST;
-                };
-                yield stairs.setValue(StairBlock.FACING, facing);
+                yield stairs.setValue(StairBlock.FACING, facing(m.level()));
             }
+        };
+    }
+
+    private static Direction facing(int level) {
+        return switch (level) {
+            case Material.FACING_NORTH -> Direction.NORTH;
+            case Material.FACING_SOUTH -> Direction.SOUTH;
+            case Material.FACING_WEST -> Direction.WEST;
+            default -> Direction.EAST;
         };
     }
 

@@ -64,6 +64,27 @@ real WADs without a game, and what keeps a version port to the `neoforge` side.
   (4-neighbourhood). Watertight without tracing walls.
 - **Doom-passable stays passable:** a sector at least 56 units high always gets
   at least 2 blocks of air after rounding.
+- **Thin walls are thickened, not lost.** Doom walls between rooms are often
+  thinner than a column (two one-sided lines 0-16 units apart), and each column
+  takes the sector at its centre, so they vanished and rooms merged. `thinWalls`
+  turns the column nearer any one-sided line crossing the segment between two
+  neighbouring centres into void (and so a wall). Thin pillars survive the same
+  way.
+- **Ceilings are per column (`colCeil`), cleared for walking.** Rounding each
+  sector alone left E1M2's lintels 1.5 blocks over the higher floor (Doom: 56
+  units, exactly enough). Where two 8-neighbour columns' sectors are
+  Doom-passable (opening >= 56, step <= 24), the lower ceiling is raised to give
+  2 blocks over the higher floor. Corners count: diagonal edges.
+- **Outdoor walls reach the nearby sky.** Doom draws no wall between two sky
+  ceilings of different heights (it paints sky), so outer walls by a sky sector
+  are raised to the tallest sky within 24 columns. Otherwise you see out.
+- **Lifts are ladders.** Lift sectors (Doom 10/21/62/88/120-123, Hexen 62,
+  by tag) stay raised as Doom stores them; the lower column beside each gets a
+  ladder up the lift's face.
+- **`everyDoomOpeningIsWalkable`** checks every 8-neighbour column pair of
+  Doom-passable sectors in every map on disk (786k at the time of writing)
+  for 2 blocks of headroom and a step of a block at most. It found the
+  lintels, the merged thin walls and misread ladders; keep it at zero.
 - **Doors are built open** (ceiling to lowest neighbouring ceiling - 4, as the
   engine opens them). Door specials: Doom local/tagged lists and Hexen 11/12/13
   in `Voxelizer`.
