@@ -1,0 +1,96 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.141'
+    id 'idea'
+}
+
+tasks.named('wrapper', Wrapper).configure {
+    distributionType = Wrapper.DistributionType.BIN
+}
+
+// The +mc tag, so jars for different Minecraft versions are never confused
+// (same convention as LegendQuest and Standards).
+version = "${mod_version}+mc${minecraft_version}"
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+neoForge {
+    version = project.neo_version
+
+    runs {
+        client {
+            client()
+        }
+        // A second client that joins the dev server by itself, like
+        // LegendQuest's TestBuddy. Port 25586 is WadCraft's.
+        clientBuddy {
+            client()
+            programArguments.addAll '--username', 'TestBuddy', '--quickPlayMultiplayer', '127.0.0.1:25586'
+            gameDirectory = file('runBuddy')
+        }
+        server {
+            server()
+            programArgument '--nogui'
+        }
+        configureEach {
+            logLevel = org.slf4j.event.Level.INFO
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+    // The tests read real WADs from the project folder when they are there.
+    systemProperty 'wadcraft.wadDir', file('.').absolutePath
+    testLogging {
+        events 'failed', 'skipped'
+        showStandardStreams = true
+    }
+}
+
+var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
+    var replaceProperties = [
+            minecraft_version      : minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            neo_version            : neo_version,
+            neo_version_range      : neo_version_range,
+            loader_version_range   : loader_version_range,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : mod_version,
+            mod_authors            : mod_authors,
+            mod_description        : mod_description,
+    ]
+    inputs.properties replaceProperties
+    expand replaceProperties
+    from "src/main/templates"
+    into "build/generated/sources/modMetadata"
+}
+sourceSets.main.resources.srcDir generateModMetadata
+neoForge.ideSyncTask generateModMetadata
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

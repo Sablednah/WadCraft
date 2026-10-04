@@ -1,0 +1,31 @@
+### WAD files: NEVER commit any. ###
+# Wads-DONOTSHIP/ holds commercial id Software data (DOOM.WAD, DOOM2.WAD, ...)
+# that must not be redistributed. Freedoom is BSD-licensed and could be shipped,
+# but at ~28MB each it does not belong in git either. Tests find them on disk and
+# skip when they are absent.
+*.[wW][aA][dD]
+/Wads-DONOTSHIP/
+
+### Gradle ###
+.gradle
+# Rooted: a bare "build/" also swallows the com.sablednah.wadcraft.build package.
+/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+### IDEs ###
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings
+/bin/
+/out/
+
+### Minecraft dev runs ###
+/run/
+/runBuddy/
+/repo/
+
+### Local agent settings ###
+/.claude/settings.local.json

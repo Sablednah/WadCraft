@@ -1,0 +1,172 @@
+package com.sablednah.wadcraft;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Stream;
+
+import javax.imageio.ImageIO;
+
+import org.junit.jupiter.api.Test;
+
+import com.sablednah.wadcraft.build.BuildOptions;
+import com.sablednah.wadcraft.build.Material;
+import com.sablednah.wadcraft.build.VoxelModel;
+import com.sablednah.wadcraft.build.Voxelizer;
+import com.sablednah.wadcraft.wad.DoomMap;
+import com.sablednah.wadcraft.wad.TextureColours;
+import com.sablednah.wadcraft.wad.WadFile;
+
+/**
+ * Against real WADs, when they are on disk. None are in git (see .gitignore):
+ * the commercial ones may not be redistributed, and the Freedoom ones are too
+ * big. A missing WAD skips its test rather than failing it.
+ */
+class WadFilesTest {
+
+    private static final Path DIR = Path.of(System.getProperty("wadcraft.wadDir", "."));
+    private static final Path OUT = DIR.resolve("build/test-renders");
+
+    private static List<Path> allWads() throws IOException {
+        List<Path> wads = new ArrayList<>();
+        for (Path dir : List.of(DIR, DIR.resolve("Wads-DONOTSHIP"))) {
+            if (!Files.isDirectory(dir)) continue;
+            try (Stream<Path> s = Files.list(dir)) {
+                s.filter(p -> p.getFileName().toString().toLowerCase().endsWith(".wad")).sorted().forEach(wads::add);
+            }
+        }
+        return wads;
+    }
+
+    private static Path find(String name) throws IOException {
+        for (Path p : allWads()) if (p.getFileName().toString().equalsIgnoreCase(name)) return p;
+        return null;
+    }
+
+    @Test
+    void freedoomE1M1() throws IOException {
+        Path path = find("freedoom1.wad");
+        assumeTrue(path != null, "freedoom1.wad not present");
+        WadFile wad = WadFile.read(path);
+        assertEquals(WadFile.Kind.IWAD, wad.kind());
+        assertTrue(wad.map("E1M1").isPresent());
+        DoomMap map = DoomMap.read(wad, "E1M1");
+        assertTrue(map.playerStart().isPresent(), "E1M1 has a player start");
+        VoxelModel model = Voxelizer.build(map, BuildOptions.defaults());
+        int[] origin = model.column(model.originI(), model.originJ());
+        assertTrue(hasAirAt(origin, model.originY()), "the player starts standing in air");
+        assertTrue(hasAirAt(origin, model.originY() + 1), "with headroom");
+        render(model, "freedoom1-E1M1");
+    }
+
+    @Test
+    void shareWareE1M1() throws IOException {
+        Path path = find("doom1.wad");
+        assumeTrue(path != null, "doom1.wad not present");
+        DoomMap map = DoomMap.read(WadFile.read(path), "E1M1");
+        VoxelModel model = Voxelizer.build(map, BuildOptions.defaults());
+        render(model, "doom1-E1M1");
+        int[] origin = model.column(model.originI(), model.originJ());
+        System.out.println("doom1 start " + map.playerStart().get() + " origin column " + java.util.Arrays.toString(origin)
+                + " originY " + model.originY());
+        assertTrue(hasAirAt(origin, model.originY()) && hasAirAt(origin, model.originY() + 1));
+    }
+
+    /** Every binary map in every WAD present reads and builds without throwing. */
+    @Test
+    void everyMapBuilds() throws IOException {
+        List<Path> wads = allWads();
+        assumeTrue(!wads.isEmpty(), "no WADs present");
+        int built = 0, skipped = 0;
+        for (Path path : wads) {
+            WadFile wad;
+            try {
+                wad = WadFile.read(path);
+            } catch (IOException damaged) {
+                System.out.println("unreadable: " + damaged.getMessage());
+                continue;
+            }
+            List<WadFile> withIwad = List.of(wad);
+            TextureColours colours = TextureColours.read(withIwad);
+            System.out.printf("%-14s %s  %3d maps  %4d textures  %3d flats%n", path.getFileName(), wad.kind(),
+                    wad.maps().size(), colours.wallCount(), colours.flatCount());
+            for (WadFile.MapEntry entry : wad.maps()) {
+                if (entry.format() == WadFile.MapFormat.UDMF) {
+                    skipped++;
+                    continue;
+                }
+                DoomMap map = DoomMap.read(wad, entry.name());
+                VoxelModel model = Voxelizer.build(map, BuildOptions.defaults());
+                assertTrue(model.blocks() > 0, path.getFileName() + " " + entry.name() + " built nothing");
+                built++;
+            }
+        }
+        System.out.println("built " + built + " maps, skipped " + skipped + " UDMF");
+        assertTrue(built > 0);
+    }
+
+    @Test
+    void hexenMap() throws IOException {
+        Path path = find("hexen.wad");
+        assumeTrue(path != null, "hexen.wad not present");
+        WadFile wad = WadFile.read(path);
+        WadFile.MapEntry first = wad.maps().get(0);
+        assertEquals(WadFile.MapFormat.HEXEN, first.format());
+        VoxelModel model = Voxelizer.build(DoomMap.read(wad, first.name()), BuildOptions.defaults());
+        render(model, "hexen-" + first.name());
+    }
+
+    private static boolean hasAirAt(int[] runs, int y) {
+        for (int r = 0; r < runs.length; r += 3) {
+            if (y >= runs[r] && y <= runs[r + 1]) return runs[r + 2] == 0;
+        }
+        return false;
+    }
+
+    /**
+     * Top-down picture, 4px per column: floor height as brightness, walls
+     * dark red, void black, the player start green. A wrong sector lookup
+     * shows up at once as speckle or a flooded void.
+     */
+    private static void render(VoxelModel model, String name) throws IOException {
+        Files.createDirectories(OUT);
+        int px = 4;
+        BufferedImage img = new BufferedImage(model.width() * px, model.depth() * px, BufferedImage.TYPE_INT_RGB);
+        int[] range = model.heightRange();
+        for (int j = 0; j < model.depth(); j++) {
+            for (int i = 0; i < model.width(); i++) {
+                int[] runs = model.column(i, j);
+                int colour = 0;
+                int floor = Integer.MIN_VALUE;
+                boolean air = false, wall = false;
+                for (int r = 0; r < runs.length; r += 3) {
+                    Material m = model.materials().get(runs[r + 2]);
+                    if (m.kind() == Material.Kind.AIR) {
+                        air = true;
+                        floor = runs[r];
+                    }
+                    if (m.kind() == Material.Kind.WALL) wall = true;
+                }
+                if (air) {
+                    int v = 60 + (int) (180.0 * (floor - model.originY() - range[0]) / Math.max(1, range[1] - range[0]));
+                    v = Math.max(0, Math.min(255, v));
+                    colour = v << 16 | v << 8 | v;
+                } else if (wall) {
+                    colour = 0x802020;
+                }
+                if (i == model.originI() && j == model.originJ()) colour = 0x00FF00;
+                for (int y = 0; y < px; y++) for (int x = 0; x < px; x++) img.setRGB(i * px + x, j * px + y, colour);
+            }
+        }
+        ImageIO.write(img, "png", OUT.resolve(name + ".png").toFile());
+        System.out.printf("%s: %dx%d columns, %d blocks, height %d..%d%n", name, model.width(), model.depth(),
+                model.blocks(), range[0], range[1]);
+    }
+}
