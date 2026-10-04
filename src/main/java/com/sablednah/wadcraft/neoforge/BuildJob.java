@@ -12,6 +12,7 @@ import it.unimi.dsi.fastutil.longs.LongArrayList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
@@ -49,7 +50,15 @@ final class BuildJob implements PlacementJob {
             IntConsumer progress, CompletableFuture<BuildResult> future) {
         this.level = level;
         this.model = model;
-        this.states = states;
+        // Turn every block with the build, so a stair still faces up its step.
+        Rotation rotation = switch (turns & 3) {
+            case 1 -> Rotation.CLOCKWISE_90;
+            case 2 -> Rotation.CLOCKWISE_180;
+            case 3 -> Rotation.COUNTERCLOCKWISE_90;
+            default -> Rotation.NONE;
+        };
+        this.states = new BlockState[states.length];
+        for (int k = 0; k < states.length; k++) this.states[k] = states[k].rotate(rotation);
         this.anchor = anchor;
         this.turns = turns;
         this.progress = progress;

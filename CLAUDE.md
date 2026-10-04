@@ -72,6 +72,20 @@ real WADs without a game, and what keeps a version port to the `neoforge` side.
   (A first version kept them out of 2-high rooms after a test "failed" on the
   shareware E1M1 start. The test was wrong: it counted a light block as solid.
   E1M1's 2-high start room was then pitch dark in game.)
+- **Half-block floors.** `floorY` is the block the floor surface sits in;
+  `halfStep` puts a bottom slab in it, and headroom over a slab is 3 blocks.
+  A half step with exactly one cardinal neighbour half a block higher is a
+  stair facing it (`Material.level` carries the facing; `BuildJob` rotates
+  every state with the build). A corner stays a slab.
+- **Hazard floors are lava only where contained**: Doom damaging specials
+  (4, 5, 7, 11, 16, and Boom's bits 5-6). Lava needs every 4-neighbour floor at
+  least as high and a bed under it; otherwise magma. Lower walls reach one
+  below the lowest neighbour's floor so nothing beside a pool is open. The test
+  `stepsAndHazards` checks every liquid block is enclosed.
+- **No flammable blocks in the automatic palette.** Overworld planks were in it
+  and E1M1 caught fire on the rig: wood-brown floors beside the nukage-lava.
+  Crimson and warped planks do not burn and stay. Do not add anything that
+  burns back to `CANDIDATES` or `SLABS`.
 - **Colours come from the WAD**, matched to blocks by redmean distance;
   `config/wadcraft/blocks.json` overrides by name. A bare PWAD borrows an IWAD
   from the folder of the same style (ExMy vs MAPxx).

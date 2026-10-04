@@ -38,6 +38,16 @@ All commands need operator permission (level 2).
   write. Override any texture in `config/wadcraft/blocks.json` (`*` is a
   wildcard). Lava is magma, and light panels glow.
 - **Doors open**, so the level can be walked.
+- **Steps you can walk up.** Floors are worked out in half blocks: a half step
+  is a slab, and a half step beside a floor half a block higher is a stair
+  facing up it, so Doom's staircases climb without jumping.
+- **Toxic floors are lava.** Anywhere Doom hurts you for standing (nukage,
+  slime) is lava, in pools with solid ground under and around them. Where lava
+  could run onto a lower floor, it is magma instead. Both blocks can be changed
+  in `blocks.json` (`hazard_floor`, `hazard_floor_spill`).
+- **Nothing in a build can burn.** The automatic palette has no flammable
+  blocks, because a lava pool beside a wooden floor would take the whole level
+  down. An override can still choose wood.
 - **The level's lighting**, as invisible light blocks at each sector's brightness.
 - Builds are placed a slice per tick, so a big map does not freeze the server.
 

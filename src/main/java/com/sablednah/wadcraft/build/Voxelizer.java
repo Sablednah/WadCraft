@@ -56,6 +56,8 @@ public final class Voxelizer {
     private int[] sectorOf;      // per column, -1 = void
     private int[] floorY, ceilY; // per sector, in blocks
     private boolean[] sky;       // per sector
+    private boolean[] halfStep;  // per sector: the floor surface is half a block up (a slab)
+    private boolean[] hazard;    // per sector: a damaging floor (nukage, slime, lava)
     private LineIndex lineIndex;
 
     private final List<Material> materials = new ArrayList<>();
@@ -165,13 +167,80 @@ public final class Voxelizer {
         floorY = new int[n];
         ceilY = new int[n];
         sky = new boolean[n];
+        halfStep = new boolean[n];
+        hazard = new boolean[n];
         for (int s = 0; s < n; s++) {
-            floorY[s] = (int) Math.round(floors[s] / scale);
+            hazard[s] = options.hazards() && damaging(sectors.get(s).special());
+            // Floors in half blocks, so a Doom staircase of small steps becomes
+            // slab, block, slab, block: walkable without a single jump. floorY is
+            // the block the floor's surface sits in; a half step puts a bottom
+            // slab in it. A hazard floor is never a slab: lava has no half.
+            long halves = Math.round(floors[s] * 2 / scale);
+            if (options.halfSteps() && !hazard[s]) {
+                floorY[s] = (int) Math.floorDiv(halves, 2);
+                halfStep[s] = (halves & 1) != 0;
+            } else {
+                floorY[s] = (int) Math.round(floors[s] / scale);
+            }
             ceilY[s] = (int) Math.round(ceilings[s] / scale);
-            // Rounding must never seal a space a Doom player could walk through.
-            if (ceilings[s] - floors[s] >= DOOM_PLAYER_HEIGHT) ceilY[s] = Math.max(ceilY[s], floorY[s] + 2);
+            // Rounding must never seal a space a Doom player could walk through:
+            // two blocks of headroom, three when standing on a slab.
+            if (ceilings[s] - floors[s] >= DOOM_PLAYER_HEIGHT) {
+                ceilY[s] = Math.max(ceilY[s], floorY[s] + (halfStep[s] ? 3 : 2));
+            }
             sky[s] = sectors.get(s).ceilingFlat().startsWith("F_SKY");
         }
+    }
+
+    /**
+     * A floor that hurts: Doom's damaging sector specials (4, 5, 7, 11, 16), and
+     * Boom's generalised ones, which carry damage in bits 5-6. Hexen numbers its
+     * sector specials differently and is left alone.
+     */
+    private boolean damaging(int special) {
+        if (map.format() != WadFile.MapFormat.DOOM) return false;
+        if (special >= 32) return (special & 0x60) != 0;
+        return special == 4 || special == 5 || special == 7 || special == 11 || special == 16;
+    }
+
+    /** Floor surface in half blocks: a slab adds one. */
+    private int surface(int s) {
+        return floorY[s] * 2 + (halfStep[s] ? 1 : 0);
+    }
+
+    /**
+     * A half step right beside a floor half a block higher is a stair facing up
+     * it, so a run of small steps reads as a staircase rather than as slabs.
+     * Only when exactly one side is that step up; a corner stays a slab.
+     *
+     * @return {@link Material#FACING_NONE}, or a facing toward the higher floor
+     */
+    private int stairFacing(int i, int j, int s) {
+        int found = Material.FACING_NONE;
+        for (int k = 0; k < NEIGHBOURS_4.length; k++) {
+            int n = sectorAt(i + NEIGHBOURS_4[k][0], j + NEIGHBOURS_4[k][1]);
+            if (n < 0 || surface(n) != surface(s) + 1) continue;
+            if (found != Material.FACING_NONE) return Material.FACING_NONE;
+            found = FACING_OF[k];
+        }
+        return found;
+    }
+
+    /** NEIGHBOURS_4's directions as Material facings: east, west, south, north. */
+    private static final int[] FACING_OF = {Material.FACING_EAST, Material.FACING_WEST,
+            Material.FACING_SOUTH, Material.FACING_NORTH};
+
+    /**
+     * Lava flows. It is only safe where every neighbour's floor is at least as
+     * high, so the blocks beside it at its own level are solid; anywhere it could
+     * spill onto a lower floor, the solid stand-in is used instead.
+     */
+    private boolean contained(int i, int j, int f) {
+        for (int[] d : NEIGHBOURS_4) {
+            int n = sectorAt(i + d[0], j + d[1]);
+            if (n >= 0 && floorY[n] < f) return false;
+        }
+        return true;
     }
 
     /**
@@ -289,8 +358,21 @@ public final class Voxelizer {
             return runs.toArray();
         }
 
-        if (lowest < f - 1) runs.add(lowest, f - 2, wall(stepTexture(px, py, s, false)));
-        runs.add(f - 1, f - 1, flat(map.sectors().get(s).floorFlat()));
+        String floorFlat = map.sectors().get(s).floorFlat();
+        // The lower wall reaches one below the lowest neighbour's floor, to its
+        // floor block's level, so nothing beside a pool at that level is open.
+        if (lowest < f) runs.add(lowest - 1, f - 2, wall(stepTexture(px, py, s, false)));
+        if (hazard[s]) {
+            boolean liquid = contained(i, j, f);
+            if (liquid && lowest >= f) runs.add(f - 2, f - 2, flat(floorFlat)); // a bed under the lava
+            runs.add(f - 1, f - 1, new Material(Material.Kind.HAZARD, floorFlat, liquid ? 0 : 1));
+        } else {
+            runs.add(f - 1, f - 1, flat(floorFlat));
+        }
+        if (halfStep[s]) {
+            runs.add(f, f, new Material(Material.Kind.SLAB, floorFlat, stairFacing(i, j, s)));
+            f++; // air starts above the slab's block
+        }
 
         int airTop = c - 1;
         // In the top air block. A light block has no collision and cannot be seen,

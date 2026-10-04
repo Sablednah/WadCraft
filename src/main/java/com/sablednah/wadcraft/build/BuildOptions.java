@@ -7,14 +7,17 @@ package com.sablednah.wadcraft.build;
  *                      units) about the height of a Minecraft one.
  * @param openDoors     build doors open, so the level can be walked
  * @param lights        place invisible light blocks at each sector's light level
+ * @param halfSteps     floors in half blocks: a half step is a slab, so stairs walk
+ * @param hazards       damaging floors (nukage, slime) become lava where it cannot spill
  */
-public record BuildOptions(int unitsPerBlock, boolean openDoors, boolean lights) {
+public record BuildOptions(int unitsPerBlock, boolean openDoors, boolean lights, boolean halfSteps,
+        boolean hazards) {
 
     public static final int MIN_SCALE = 8;
     public static final int MAX_SCALE = 128;
 
     public static BuildOptions defaults() {
-        return new BuildOptions(32, true, true);
+        return new BuildOptions(32, true, true, true, true);
     }
 
     public BuildOptions {
@@ -24,6 +27,6 @@ public record BuildOptions(int unitsPerBlock, boolean openDoors, boolean lights)
     }
 
     public BuildOptions withScale(int units) {
-        return new BuildOptions(units, openDoors, lights);
+        return new BuildOptions(units, openDoors, lights, halfSteps, hazards);
     }
 }

@@ -20,11 +20,13 @@ import com.sablednah.wadcraft.WadCraft;
 import com.sablednah.wadcraft.build.Material;
 import com.sablednah.wadcraft.wad.TextureColours;
 
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LightBlock;
+import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
@@ -43,6 +45,12 @@ public final class BlockPalette {
      * Opaque full blocks and their approximate average colours. Only blocks that
      * read as a wall or a floor: no ores, no logs with bark ends, nothing that
      * glows (that is for the overrides to choose deliberately).
+     *
+     * <p><b>Nothing flammable.</b> Overworld planks were here and E1M1 caught
+     * fire: its nukage is lava, its wood-brown floors had matched to dark oak,
+     * and lava lights what is beside it. With fire spread on, that is the whole
+     * level gone. Crimson and warped planks do not burn, so they stay. An
+     * override in blocks.json can still choose wood, deliberately.</p>
      */
     private static final Object[][] CANDIDATES = {
             {"stone", 0x7D7D7D}, {"cobblestone", 0x7F7F7F}, {"smooth_stone", 0x9E9E9E},
@@ -60,9 +68,7 @@ public final class BlockPalette {
             {"iron_block", 0xDCDCDC}, {"gold_block", 0xF6D03D}, {"copper_block", 0xC06C50},
             {"exposed_copper", 0xA17D67}, {"weathered_copper", 0x6D916B}, {"oxidized_copper", 0x4F997E},
             {"prismarine", 0x639C97}, {"dark_prismarine", 0x335B4B}, {"end_stone_bricks", 0xDAE0A2},
-            {"purpur_block", 0xA97DA9}, {"oak_planks", 0xA2824E}, {"spruce_planks", 0x725430},
-            {"birch_planks", 0xC0AF79}, {"dark_oak_planks", 0x422B14}, {"jungle_planks", 0xA07351},
-            {"mangrove_planks", 0x763631}, {"crimson_planks", 0x653147}, {"warped_planks", 0x2B6963},
+            {"purpur_block", 0xA97DA9}, {"crimson_planks", 0x653147}, {"warped_planks", 0x2B6963},
             {"white_concrete", 0xCFD5D6}, {"light_gray_concrete", 0x7D7D73}, {"gray_concrete", 0x36393D},
             {"black_concrete", 0x080A0F}, {"brown_concrete", 0x603B1F}, {"red_concrete", 0x8E2020},
             {"orange_concrete", 0xE06100}, {"yellow_concrete", 0xF0AF15}, {"lime_concrete", 0x5EA818},
@@ -75,6 +81,40 @@ public final class BlockPalette {
             {"purple_terracotta", 0x764656}, {"blue_terracotta", 0x4A3B5B}, {"brown_terracotta", 0x4D3323},
             {"green_terracotta", 0x4C532A}, {"red_terracotta", 0x8F3D2E}, {"black_terracotta", 0x251610},
     };
+
+    /**
+     * Each candidate's slab, for half-step floors. A slab follows the block its
+     * floor would have been, so a step reads as the same floor; concrete and
+     * terracotta have no slabs, so those floors fall back to the nearest colour
+     * that does.
+     */
+    private static final Map<String, String> SLABS = Map.ofEntries(
+            Map.entry("stone", "stone_slab"), Map.entry("cobblestone", "cobblestone_slab"),
+            Map.entry("smooth_stone", "smooth_stone_slab"), Map.entry("andesite", "andesite_slab"),
+            Map.entry("polished_andesite", "polished_andesite_slab"), Map.entry("diorite", "diorite_slab"),
+            Map.entry("polished_diorite", "polished_diorite_slab"), Map.entry("granite", "granite_slab"),
+            Map.entry("polished_granite", "polished_granite_slab"),
+            Map.entry("polished_deepslate", "polished_deepslate_slab"),
+            Map.entry("deepslate_tiles", "deepslate_tile_slab"), Map.entry("deepslate_bricks", "deepslate_brick_slab"),
+            Map.entry("cobbled_deepslate", "cobbled_deepslate_slab"), Map.entry("tuff", "tuff_slab"),
+            Map.entry("tuff_bricks", "tuff_brick_slab"), Map.entry("bricks", "brick_slab"),
+            Map.entry("stone_bricks", "stone_brick_slab"), Map.entry("mossy_stone_bricks", "mossy_stone_brick_slab"),
+            Map.entry("nether_bricks", "nether_brick_slab"), Map.entry("red_nether_bricks", "red_nether_brick_slab"),
+            Map.entry("blackstone", "blackstone_slab"), Map.entry("polished_blackstone", "polished_blackstone_slab"),
+            Map.entry("polished_blackstone_bricks", "polished_blackstone_brick_slab"),
+            Map.entry("quartz_block", "quartz_slab"), Map.entry("sandstone", "sandstone_slab"),
+            Map.entry("cut_sandstone", "cut_sandstone_slab"), Map.entry("red_sandstone", "red_sandstone_slab"),
+            Map.entry("mud_bricks", "mud_brick_slab"), Map.entry("prismarine", "prismarine_slab"),
+            Map.entry("dark_prismarine", "dark_prismarine_slab"), Map.entry("end_stone_bricks", "end_stone_brick_slab"),
+            Map.entry("purpur_block", "purpur_slab"), Map.entry("crimson_planks", "crimson_slab"),
+            Map.entry("warped_planks", "warped_slab"), Map.entry("copper_block", "cut_copper_slab"),
+            Map.entry("exposed_copper", "exposed_cut_copper_slab"),
+            Map.entry("weathered_copper", "weathered_cut_copper_slab"),
+            Map.entry("oxidized_copper", "oxidized_cut_copper_slab"));
+
+    /** Damaging floors, where a liquid cannot spill, and where it could. */
+    private static final String DEFAULT_HAZARD = "minecraft:lava";
+    private static final String DEFAULT_HAZARD_SOLID = "minecraft:magma_block";
 
     /** Written to {@code config/wadcraft/blocks.json} the first time, then the file is the server owner's. */
     private static final Map<String, String> DEFAULT_OVERRIDES = new LinkedHashMap<>();
@@ -94,6 +134,13 @@ public final class BlockPalette {
     private record Override(Pattern pattern, BlockState state) {}
 
     private final List<Candidate> candidates = new ArrayList<>();
+    /** Full block → its slab, for the candidates that have one. */
+    private final Map<Block, BlockState> slabOf = new java.util.HashMap<>();
+    /** Full block → its stairs, where it has them (smooth stone and cut sandstone do not). */
+    private final Map<Block, BlockState> stairsOf = new java.util.HashMap<>();
+    private final List<Candidate> slabCandidates = new ArrayList<>();
+    private BlockState hazard;
+    private BlockState hazardSolid;
     private final List<Override> overrides = new ArrayList<>();
 
     private BlockPalette() {}
@@ -101,8 +148,19 @@ public final class BlockPalette {
     public static BlockPalette load(Path configDir) {
         BlockPalette palette = new BlockPalette();
         for (Object[] c : CANDIDATES) {
-            block("minecraft:" + c[0]).ifPresent(b -> palette.candidates.add(new Candidate(b, (Integer) c[1])));
+            Optional<BlockState> full = block("minecraft:" + c[0]);
+            if (full.isEmpty()) continue;
+            palette.candidates.add(new Candidate(full.get(), (Integer) c[1]));
+            String slabId = SLABS.get((String) c[0]);
+            Optional<BlockState> slab = slabId == null ? Optional.empty() : block("minecraft:" + slabId);
+            if (slab.isPresent()) {
+                palette.slabOf.put(full.get().getBlock(), slab.get());
+                palette.slabCandidates.add(new Candidate(slab.get(), (Integer) c[1]));
+                block("minecraft:" + slabId.replace("_slab", "_stairs"))
+                        .ifPresent(stairs -> palette.stairsOf.put(slab.get().getBlock(), stairs));
+            }
         }
+        String hazardId = DEFAULT_HAZARD, hazardSolidId = DEFAULT_HAZARD_SOLID;
         Path file = configDir.resolve("blocks.json");
         Map<String, String> entries = new LinkedHashMap<>(DEFAULT_OVERRIDES);
         try {
@@ -111,6 +169,9 @@ public final class BlockPalette {
                 try (Reader r = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
                     JsonObject json = new Gson().fromJson(r, JsonObject.class);
                     JsonObject o = json != null && json.has("overrides") ? json.getAsJsonObject("overrides") : new JsonObject();
+                    // Absent from a file written by an older version: the default applies.
+                    if (json != null && json.has("hazard_floor")) hazardId = json.get("hazard_floor").getAsString();
+                    if (json != null && json.has("hazard_floor_spill")) hazardSolidId = json.get("hazard_floor_spill").getAsString();
                     for (var e : o.entrySet()) entries.put(e.getKey(), e.getValue().getAsString());
                 }
             } else {
@@ -121,12 +182,18 @@ public final class BlockPalette {
                 JsonObject o = new JsonObject();
                 DEFAULT_OVERRIDES.forEach(o::addProperty);
                 root.add("overrides", o);
+                root.addProperty("_hazard_comment", "Damaging floors (nukage, slime): hazard_floor where it is "
+                        + "enclosed, hazard_floor_spill where a liquid would run onto a lower floor.");
+                root.addProperty("hazard_floor", DEFAULT_HAZARD);
+                root.addProperty("hazard_floor_spill", DEFAULT_HAZARD_SOLID);
                 Files.writeString(file, new GsonBuilder().setPrettyPrinting().create().toJson(root));
             }
         } catch (IOException | RuntimeException e) {
             WadCraft.LOGGER.warn("Could not read {}; using the built-in overrides: {}", file, e.toString());
             entries = new LinkedHashMap<>(DEFAULT_OVERRIDES);
         }
+        palette.hazard = block(hazardId).orElseGet(() -> block(DEFAULT_HAZARD).orElseThrow());
+        palette.hazardSolid = block(hazardSolidId).orElseGet(() -> block(DEFAULT_HAZARD_SOLID).orElseThrow());
         for (var e : entries.entrySet()) {
             Optional<BlockState> state = block(e.getValue());
             if (state.isEmpty()) {
@@ -166,24 +233,51 @@ public final class BlockPalette {
         return switch (m.kind()) {
             case AIR -> Blocks.AIR.defaultBlockState();
             case LIGHT -> Blocks.LIGHT.defaultBlockState().setValue(LightBlock.LEVEL, Math.max(0, Math.min(15, m.level())));
-            case WALL, FLAT -> {
-                String name = m.name().toUpperCase(Locale.ROOT);
-                for (Override o : overrides) {
-                    if (o.pattern().matcher(name).matches()) yield o.state();
+            case HAZARD -> m.level() == 0 ? hazard : hazardSolid;
+            case WALL, FLAT -> full(m, colours);
+            case SLAB -> {
+                // The slab of the block this floor would have been, if it has one.
+                BlockState full = full(m, colours);
+                BlockState slab = slabOf.get(full.getBlock());
+                if (slab == null) {
+                    Optional<Integer> rgb = colours.flat(m.name()).or(() -> colours.wall(m.name()));
+                    slab = nearest(rgb.orElse(0x7D7D7D), slabCandidates, Blocks.STONE_SLAB.defaultBlockState());
                 }
-                Optional<Integer> rgb = m.kind() == Material.Kind.FLAT ? colours.flat(name) : colours.wall(name);
-                if (rgb.isEmpty()) rgb = m.kind() == Material.Kind.FLAT ? colours.wall(name) : colours.flat(name);
-                yield rgb.map(this::nearest).orElse(Blocks.STONE.defaultBlockState());
+                // A stair facing up the step, in the same stone, when it has stairs.
+                BlockState stairs = m.level() == Material.FACING_NONE ? null : stairsOf.get(slab.getBlock());
+                if (stairs == null) yield slab;
+                Direction facing = switch (m.level()) {
+                    case Material.FACING_NORTH -> Direction.NORTH;
+                    case Material.FACING_SOUTH -> Direction.SOUTH;
+                    case Material.FACING_WEST -> Direction.WEST;
+                    default -> Direction.EAST;
+                };
+                yield stairs.setValue(StairBlock.FACING, facing);
             }
         };
     }
 
+    private BlockState full(Material m, TextureColours colours) {
+        String name = m.name().toUpperCase(Locale.ROOT);
+        for (Override o : overrides) {
+            if (o.pattern().matcher(name).matches()) return o.state();
+        }
+        boolean flat = m.kind() != Material.Kind.WALL;
+        Optional<Integer> rgb = flat ? colours.flat(name) : colours.wall(name);
+        if (rgb.isEmpty()) rgb = flat ? colours.wall(name) : colours.flat(name);
+        return rgb.map(this::nearest).orElse(Blocks.STONE.defaultBlockState());
+    }
+
     /** "Redmean" distance: cheap, and much closer to how eyes rank colours than plain RGB. */
     private BlockState nearest(int rgb) {
+        return nearest(rgb, candidates, Blocks.STONE.defaultBlockState());
+    }
+
+    private static BlockState nearest(int rgb, List<Candidate> from, BlockState fallback) {
         int r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
-        BlockState best = Blocks.STONE.defaultBlockState();
+        BlockState best = fallback;
         double bestD = Double.MAX_VALUE;
-        for (Candidate c : candidates) {
+        for (Candidate c : from) {
             int cr = (c.rgb() >> 16) & 0xFF, cg = (c.rgb() >> 8) & 0xFF, cb = c.rgb() & 0xFF;
             double rm = (r + cr) / 2.0;
             double dr = r - cr, dg = g - cg, db = b - cb;

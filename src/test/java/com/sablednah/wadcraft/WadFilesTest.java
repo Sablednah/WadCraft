@@ -79,6 +79,65 @@ class WadFilesTest {
         assertTrue(hasAirAt(model, origin, model.originY()) && hasAirAt(model, origin, model.originY() + 1));
     }
 
+    /**
+     * Shareware E1M1 has both: the steps up to the armour beside the start are
+     * small enough to become slabs, and its nukage is a damaging floor. Every
+     * liquid block must be enclosed, with solid on all four sides and below,
+     * or it will run out of the pool the moment it is placed.
+     */
+    @Test
+    void stepsAndHazards() throws IOException {
+        Path path = find("doom1.wad");
+        assumeTrue(path != null, "doom1.wad not present");
+        VoxelModel model = Voxelizer.build(DoomMap.read(WadFile.read(path), "E1M1"), BuildOptions.defaults());
+        int slabs = 0, stairs = 0, liquid = 0, spill = 0;
+        for (int j = 0; j < model.depth(); j++) {
+            for (int i = 0; i < model.width(); i++) {
+                int[] runs = model.column(i, j);
+                for (int r = 0; r < runs.length; r += 3) {
+                    Material m = model.materials().get(runs[r + 2]);
+                    if (m.kind() == Material.Kind.SLAB && m.level() == Material.FACING_NONE) slabs++;
+                    if (m.kind() == Material.Kind.SLAB && m.level() != Material.FACING_NONE) stairs++;
+                    if (m.kind() == Material.Kind.HAZARD && m.level() == 1) spill++;
+                    if (m.kind() == Material.Kind.HAZARD && m.level() == 0) {
+                        liquid++;
+                        int y = runs[r];
+                        assertTrue(solidAt(model, i, j, y - 1), "liquid at " + i + "," + j + " has nothing under it");
+                        for (int[] d : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+                            int ni = i + d[0], nj = j + d[1];
+                            boolean ok = solidAt(model, ni, nj, y) || liquidAt(model, ni, nj, y);
+                            assertTrue(ok, "liquid at " + i + "," + j + " can spill towards " + ni + "," + nj);
+                        }
+                    }
+                }
+            }
+        }
+        System.out.printf("doom1 E1M1: %d slabs, %d stairs, %d lava, %d magma%n", slabs, stairs, liquid, spill);
+        assertTrue(stairs > 0, "a half step beside a higher floor is a stair");
+        assertTrue(slabs > 0, "E1M1's small steps become slabs");
+        assertTrue(liquid > 0, "E1M1's nukage becomes a liquid where it is enclosed");
+    }
+
+    private static Material at(VoxelModel model, int i, int j, int y) {
+        if (i < 0 || j < 0 || i >= model.width() || j >= model.depth()) return null;
+        int[] runs = model.column(i, j);
+        for (int r = 0; r < runs.length; r += 3) {
+            if (y >= runs[r] && y <= runs[r + 1]) return model.materials().get(runs[r + 2]);
+        }
+        return null;
+    }
+
+    private static boolean solidAt(VoxelModel model, int i, int j, int y) {
+        Material m = at(model, i, j, y);
+        return m != null && (m.kind() == Material.Kind.WALL || m.kind() == Material.Kind.FLAT
+                || m.kind() == Material.Kind.SLAB || (m.kind() == Material.Kind.HAZARD && m.level() == 1));
+    }
+
+    private static boolean liquidAt(VoxelModel model, int i, int j, int y) {
+        Material m = at(model, i, j, y);
+        return m != null && m.kind() == Material.Kind.HAZARD && m.level() == 0;
+    }
+
     /** Every binary map in every WAD present reads and builds without throwing. */
     @Test
     void everyMapBuilds() throws IOException {
