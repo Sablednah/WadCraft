@@ -13,6 +13,27 @@ are its first customers (see LegendQuest's `docs/IDEAS.md`).
 client sees everything. `displayTest="IGNORE_ALL_VERSION"` in the mods.toml
 template.
 
+## Where it stands (2026-10-05)
+
+**0.1.0, unreleased, judged "an acceptable WAD library" by Sable** after testing
+E1M1 and E1M2 in his own instance: walls show, and the texture-to-block
+matching was right from the start. Remaining gaps are those of a 1-block
+(0.5 with slabs) rendering of a 2.5D map, plus the "Not yet" list.
+
+- 1.21.11 only, on `main`. No version branches yet; when they come, follow
+  LegendQuest's branch-per-version rule. The `neoforge` package is the part
+  that will need porting; `wad` and `build` have no Minecraft imports.
+- Public repo: https://github.com/Sablednah/WadCraft. No CurseForge project
+  yet; `CURSEFORGE.md` is the drafted description. No release workflow yet.
+- Store screenshots are in `screenshots/` (gitignored), taken on the Vivo rig:
+  E1M1 hangar, nukage, lava cave, armour stairs and aerial; E1M2 windows and
+  aerial; E1M8 pentagram; freedoom E1M1 aerial. Several show id's shareware
+  maps, so the owner chooses which go on a store page; freedoom ones are the
+  safe choice.
+- **Not yet:** monsters, items and keys (things are read; only player 1's start
+  is used); moving doors and lifts; UDMF maps; the shipped-WAD path for Space
+  Husk / the sci-fi pack beyond `WadCraftApi.read(label, bytes)`.
+
 ## NEVER commit or ship a WAD
 
 `Wads-DONOTSHIP/` holds commercial id Software data (DOOM.WAD, DOOM2.WAD,

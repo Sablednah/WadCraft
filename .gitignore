@@ -22,6 +22,11 @@
 /bin/
 /out/
 
+### Store screenshots (kept local, uploaded to the store listing directly) ###
+# Several show id Software's shareware maps built in Minecraft. They are for the
+# owner to choose from, not for every clone of the repository.
+/screenshots/
+
 ### Minecraft dev runs ###
 /run/
 /runBuddy/

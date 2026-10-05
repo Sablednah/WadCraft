@@ -58,6 +58,9 @@ All commands need operator permission (level 2).
 - **The level's lighting**, as invisible light blocks at each sector's brightness.
 - Builds are placed a slice per tick, so a big map does not freeze the server.
 
+- **Windows, lintels and thin walls survive.** Anything Doom draws thinner than
+  a block is built a block thick rather than lost.
+
 Not yet: monsters and items, moving doors and lifts (lifts get ladders), UDMF (text-format) maps.
 
 ## WAD files and licences
