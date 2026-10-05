@@ -148,4 +148,46 @@ real WADs without a game, and what keeps a version port to the `neoforge` side.
 ## Testing in game
 
 Use a Vivo rig (see LegendQuest's CLAUDE.md and `~/dev/README.md` on Vivo).
-WadCraft's dev ports are **25586 / RCON 25596**; `clientBuddy` joins 25586.
+WadCraft's dev ports are **25586 / RCON 25596** (password `wcdev`);
+`clientBuddy` joins 25586.
+
+**The rig exists: `~/rig/wadcraft/` on Vivo**, display `:5`.
+- Refresh and restart in one go, from here:
+  `git ls-files -z | tar --null -T - -czf - | ssh -i ~/.ssh/vivo_ed25519 sable@192.168.7.246 'cd ~/rig/wadcraft/WadCraft && tar xzf - && timeout 400 ~/rig/wadcraft/restart.sh'`
+  (`git ls-files` sends working-tree content, so uncommitted edits go too.)
+  `restart.sh` stops server and client by repo path, restarts both, and
+  prints JOINED when TestBuddy is in. Start `:5` first with
+  `bash ~/dev/xstart.sh :5`.
+- `run/wads/` there holds `freedoom1.wad` and `DOOM1.WAD` (Sable's own machine,
+  so not distribution).
+- Build as the player over RCON:
+  `execute as TestBuddy at TestBuddy run wadcraft build DOOM1.WAD E1M1`.
+  Facing yaw 180 makes a north-facing start (angle 90) build unturned, so
+  model offsets map straight onto world x/z.
+- Look with **spectator** mode (creative falls), window `xdotool windowsize
+  <win> 1280 720`, `F1` hides the HUD, `tutorialStep:none` in
+  `runBuddy/options.txt` (edit only while the client is stopped). Teleport the
+  camera to the floor y, not one above it: in a 2-high room one block up puts
+  the eye above the ceiling, which looks like a missing roof.
+- To prove walking rather than infer it: creative, `windowfocus`, `xdotool
+  keydown w; sleep 4; keyup w`, then compare `data get entity TestBuddy Pos`.
+- Shut everything down after (stop, kill by repo path, kill the Xvfb by its
+  lock-file pid, `running.sh prune`).
+
+## Debugging a spot someone reports
+
+Sable reports with a Minecraft screenshot and often the same view in Doom. The
+fast path is to work in **Doom coordinates and the model**, not in the world:
+small throwaway Java programs compiled against `build/classes/java/main`
+(no Minecraft needed) that read the map and the `VoxelModel` and print:
+
+- the sectors bordering one sector through two-sided lines, with heights and
+  how many columns each got in the build (`0` = lost between columns);
+- a grid of `model.sectors()` around a Doom x/y range, with column centres;
+- where a Doom x/y (or a flat, or a material kind) lands as dx/dz from the
+  player start, to teleport the camera there.
+
+Recover the grid as the builder does: `minX = min vertex x - scale`,
+`maxY = max vertex y + scale`, `i = floor((x - minX) / scale)`,
+`j = floor((maxY - y) / scale)`. Every bug this session was found that way
+before it was seen, and then confirmed on the rig.
