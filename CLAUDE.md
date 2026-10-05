@@ -69,7 +69,15 @@ real WADs without a game, and what keeps a version port to the `neoforge` side.
   takes the sector at its centre, so they vanished and rooms merged. `thinWalls`
   turns the column nearer any one-sided line crossing the segment between two
   neighbouring centres into void (and so a wall). Thin pillars survive the same
-  way.
+  way. **Thin sectors too**: if that segment passes through a sector that
+  blocks more than either end (a sill above both floors, a lintel below both
+  ceilings, a shut door), the nearer column becomes it. E1M2's start-room
+  windows (16 units deep) were missing until this; thin staircase steps block
+  nothing and are left alone.
+- **Every test point is nudged off the grid** (`NUDGE_X`/`NUDGE_Y`). Column
+  centres fall on multiples of 16 and so do many Doom lines; a segment that
+  starts on a line does not cross it. The thin-sector pass first went in
+  without the nudge and still lost the E1M2 windows for exactly that reason.
 - **Ceilings are per column (`colCeil`), cleared for walking.** Rounding each
   sector alone left E1M2's lintels 1.5 blocks over the higher floor (Doom: 56
   units, exactly enough). Where two 8-neighbour columns' sectors are

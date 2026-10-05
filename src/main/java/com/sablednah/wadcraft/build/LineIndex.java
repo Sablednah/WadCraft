@@ -96,6 +96,36 @@ final class LineIndex {
         return null;
     }
 
+    /** One line crossed by a segment, at fraction {@code t} along it. */
+    record Crossing(LineDef line, double t) {}
+
+    /** Every line the segment (ax,ay)-(bx,by) crosses, nearest {@code a} first. */
+    List<Crossing> crossings(double ax, double ay, double bx, double by) {
+        List<Crossing> out = new ArrayList<>();
+        java.util.Set<Integer> seen = new java.util.HashSet<>();
+        int x0 = bucket(Math.min(ax, bx) - minX), x1 = bucket(Math.max(ax, bx) - minX);
+        int y0 = bucket(Math.min(ay, by) - minY), y1 = bucket(Math.max(ay, by) - minY);
+        for (int bx2 = x0; bx2 <= x1; bx2++) {
+            for (int by2 = y0; by2 <= y1; by2++) {
+                List<Integer> list = buckets.get(key(bx2, by2));
+                if (list == null) continue;
+                for (int idx : list) {
+                    if (!seen.add(idx)) continue;
+                    LineDef l = map.lines().get(idx);
+                    Vertex p = map.vertices().get(l.v1()), q = map.vertices().get(l.v2());
+                    if (!intersects(ax, ay, bx, by, p.x(), p.y(), q.x(), q.y())) continue;
+                    double rx = bx - ax, ry = by - ay, sx = q.x() - p.x(), sy = q.y() - p.y();
+                    double denom = rx * sy - ry * sx;
+                    if (denom == 0) continue;
+                    double t = ((p.x() - ax) * sy - (p.y() - ay) * sx) / denom;
+                    out.add(new Crossing(l, t));
+                }
+            }
+        }
+        out.sort(java.util.Comparator.comparingDouble(Crossing::t));
+        return out;
+    }
+
     private static boolean intersects(double ax, double ay, double bx, double by,
             double cx, double cy, double dx, double dy) {
         double d1 = cross(cx, cy, dx, dy, ax, ay), d2 = cross(cx, cy, dx, dy, bx, by);

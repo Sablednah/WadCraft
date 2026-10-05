@@ -372,6 +372,9 @@ public final class Voxelizer {
         }
     }
 
+    /** Off the grid, so a test point never sits exactly on an integer vertex or line. */
+    private static final double NUDGE_X = 0.21, NUDGE_Y = 0.37;
+
     private void classifyColumns() {
         sectorOf = new int[width * depth];
         List<LineDef> lines = map.lines();
@@ -379,14 +382,14 @@ public final class Voxelizer {
         List<LineDef> spanning = new ArrayList<>();
         for (int j = 0; j < depth; j++) {
             // Nudged off the grid so the ray never passes exactly through a vertex.
-            double py = centreY(j) + 0.37;
+            double py = centreY(j) + NUDGE_Y;
             spanning.clear();
             for (LineDef line : lines) {
                 double y1 = v.get(line.v1()).y(), y2 = v.get(line.v2()).y();
                 if ((y1 > py) != (y2 > py)) spanning.add(line);
             }
             for (int i = 0; i < width; i++) {
-                double px = centreX(i) + 0.21;
+                double px = centreX(i) + NUDGE_X;
                 LineDef best = null;
                 double bestX = Double.MAX_VALUE;
                 for (LineDef line : spanning) {
@@ -410,36 +413,83 @@ public final class Voxelizer {
     }
 
     /**
-     * Walls thinner than a column.
+     * Walls and sectors thinner than a column.
      *
-     * <p>Doom draws a wall between two rooms as two one-sided lines back to
-     * back, often 8 or 16 units apart and sometimes touching. Each column takes
-     * the sector at its centre, so a wall that falls between two centres simply
-     * vanishes and the rooms run into each other, and a thin pillar disappears.
-     * So wherever the segment joining two neighbouring centres crosses a
-     * one-sided line, the column nearer that line becomes wall. Thin walls come
-     * out a block thick; what Doom drew as solid stays solid.</p>
+     * <p>Each column takes the sector at its centre, so anything that falls
+     * between two centres simply vanishes: a wall drawn as two one-sided lines
+     * 0-16 units apart, a thin pillar, and - found facing east from E1M2's start -
+     * a window, whose sill and lintel are a sector a few units deep between the
+     * room and the outdoors. With it gone the room ran straight into the yard and
+     * the wall above and below each window went missing.</p>
+     *
+     * <p>So the segment joining each pair of neighbouring centres is followed
+     * through every line it crosses. If it passes through the void, the column
+     * nearer that crossing becomes wall. If it passes through a thin sector that
+     * blocks more than either end does (a sill higher than both floors, a lintel
+     * lower than both ceilings, a shut door), the nearer column becomes that
+     * sector. A thin step on a staircase blocks nothing, and is left alone.</p>
      */
     private void thinWalls() {
-        IntPredicate solid = idx -> !map.lines().get(idx).twoSided();
         for (int j = 0; j < depth; j++) {
             for (int i = 0; i < width; i++) {
                 for (int[] d : new int[][] {{1, 0}, {0, 1}}) {
                     int ni = i + d[0], nj = j + d[1];
                     if (ni >= width || nj >= depth) continue;
                     int k = j * width + i, nk = nj * width + ni;
-                    if (sectorOf[k] < 0 || sectorOf[nk] < 0) continue;
-                    double ax = centreX(i), ay = centreY(j), bx = centreX(ni), by = centreY(nj);
-                    LineDef wall = lineIndex.crossing(ax, ay, bx, by, solid);
-                    if (wall == null) continue;
-                    if (lineIndex.distanceTo(wall, ax, ay) <= lineIndex.distanceTo(wall, bx, by)) {
-                        sectorOf[k] = -1;
-                    } else {
-                        sectorOf[nk] = -1;
+                    int a = sectorOf[k], b = sectorOf[nk];
+                    if (a < 0 || b < 0) continue;
+                    // Nudged exactly as classifyColumns nudges: column centres fall on
+                    // multiples of 16, where Doom lines very often lie, and a segment
+                    // that starts on a line does not cross it. E1M2's start-room
+                    // windows were lost that way after this pass first went in.
+                    double ax = centreX(i) + NUDGE_X, ay = centreY(j) + NUDGE_Y;
+                    double bx = centreX(ni) + NUDGE_X, by = centreY(nj) + NUDGE_Y;
+                    List<LineIndex.Crossing> crossings = lineIndex.crossings(ax, ay, bx, by);
+                    if (crossings.size() < 2 && !(crossings.size() == 1 && !crossings.get(0).line().twoSided())) {
+                        continue; // straight from a to b: nothing in between
                     }
+                    // Walk the regions between crossings; the last is b's own.
+                    int pick = Integer.MIN_VALUE; // -1 = void, else a sector
+                    double pickT = 0;
+                    for (int c = 0; c < crossings.size(); c++) {
+                        LineIndex.Crossing x = crossings.get(c);
+                        if (!x.line().twoSided()) {
+                            pick = -1;
+                            pickT = x.t();
+                            break;
+                        }
+                        if (c == crossings.size() - 1) break;
+                        int region = sideTowards(x.line(), bx, by);
+                        if (region < 0 || region == a || region == b) continue;
+                        if (blocksMore(region, a, b) && (pick == Integer.MIN_VALUE || opening(region) < opening(pick))) {
+                            pick = region;
+                            pickT = (x.t() + crossings.get(c + 1).t()) / 2;
+                        }
+                    }
+                    if (pick == Integer.MIN_VALUE) continue;
+                    if (pickT <= 0.5) sectorOf[k] = pick;
+                    else sectorOf[nk] = pick;
                 }
             }
         }
+    }
+
+    /** The sector on the side of {@code line} that the point (x, y) is on, or -1. */
+    private int sideTowards(LineDef line, double x, double y) {
+        Vertex a = map.vertices().get(line.v1()), b = map.vertices().get(line.v2());
+        double cross = (b.x() - a.x()) * (y - a.y()) - (b.y() - a.y()) * (x - a.x());
+        return map.sectorOf(cross < 0 ? line.front() : line.back());
+    }
+
+    /** Does sector {@code c} stand in the way more than a and b do: a sill, a lintel, a shut door? */
+    private boolean blocksMore(int c, int a, int b) {
+        return doomFloor[c] > Math.max(doomFloor[a], doomFloor[b]) + 8
+                || doomCeil[c] < Math.min(doomCeil[a], doomCeil[b]) - 8
+                || doomCeil[c] - doomFloor[c] < DOOM_PLAYER_HEIGHT;
+    }
+
+    private int opening(int s) {
+        return s < 0 ? Integer.MIN_VALUE : doomCeil[s] - doomFloor[s];
     }
 
     private int sectorAt(int i, int j) {
