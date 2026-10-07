@@ -5,7 +5,7 @@
 Build Doom maps as Minecraft structures. Put a WAD file on your server, type one
 command, and walk into E1M1.
 
-A NeoForge mod for Minecraft 1.21.11. **Server-side only**: it places ordinary
+A NeoForge mod for Minecraft 1.21.11, 26.1.2, 26.2 and 26.3. **Server-side only**: it places ordinary
 blocks, so players with an unmodded client see everything it builds.
 
 ## Using it
@@ -91,7 +91,7 @@ without placing anything.
 ## Building from source
 
 ```bash
-./gradlew build   # -> build/libs/wadcraft-<version>+mc1.21.11.jar
+./gradlew build   # -> build/libs/wadcraft-<version>+mc<minecraft version>.jar
 ./gradlew test    # reads any WADs in the project folder; skips when there are none
 ```
 

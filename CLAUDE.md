@@ -46,6 +46,23 @@ does not belong in git either. Before any commit:
 `Doom3.WAD` in that folder is a **damaged** copy (its directory's last 94
 entries are garbage). It is refused with a clear message, and that is correct.
 
+## Versions: one branch per Minecraft version
+
+Ported 2026-10-07, the same as LegendQuest and CrawlSpace: `main` 1.21.11 (Java
+21), and `mc26.1` 26.1.2, `mc26.2` 26.2, `mc26.3` 26.3 (Java 25, NeoForge capped
+below 26.3.0.37-beta). **Docs live on `main`**; port forwards.
+
+- The one code change was `displayClientMessage(msg, true)`, which is
+  `sendOverlayMessage(msg)` on 26.x.
+- **The palette names blocks by string**, and a missing name is skipped
+  silently. So a compile proves nothing about it. The check is to compare the
+  names in `CANDIDATES` and `SLABS` with each version's
+  `assets/minecraft/blockstates`: all exist on all four. Only smooth stone's
+  and cut sandstone's stairs are absent, which the code expects.
+- `~/rig/wad-verify.sh <branch>` on Vivo (fed `git archive`) boots a server,
+  builds Freedoom's E1M1 from the console and probes the result. Do not poll
+  with `/wadcraft cancel`: it stops a running build.
+
 ## Build
 
 There is no system Java:

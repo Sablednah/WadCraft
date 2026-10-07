@@ -5,7 +5,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## 0.1.0 — 2026-10-07
 
-The first version, for Minecraft 1.21.11 on NeoForge.
+The first version, for Minecraft 1.21.11 on NeoForge; builds for 26.1.2, 26.2 and 26.3 followed the same day.
 
 - Reads IWADs and PWADs, with Doom and Hexen binary maps.
 - `/wadcraft list`, `maps`, `info`, `build [here|look] [scale]`, `undo` and
