@@ -215,7 +215,7 @@ public final class WadCommands {
         UUID owner = player != null ? player.getUUID() : null;
         WadCraftApi.build(src.getLevel(), wad, map, anchor, turns, options, owner,
                 percent -> {
-                    if (player != null) player.displayClientMessage(plain(map + ": " + percent + "%"), true);
+                    if (player != null) player.sendOverlayMessage(plain(map + ": " + percent + "%"));
                 }).whenComplete((result, error) -> {
                     if (error != null) {
                         src.sendFailure(Component.literal("Could not build " + map + ": " + error.getMessage()));
