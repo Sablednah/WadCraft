@@ -1,5 +1,7 @@
 # WadCraft
 
+![WadCraft](src/main/resources/wadcraft.png)
+
 Build Doom maps as Minecraft structures. Put a WAD file on your server, type one
 command, and walk into E1M1.
 
@@ -95,3 +97,13 @@ without placing anything.
 
 MIT licensed. The WAD format follows id Software's released Doom source
 (https://github.com/id-Software/DOOM).
+
+## Gallery
+
+![A whole Doom level, built in Minecraft](docs/images/map-from-above.jpg)
+
+| | |
+|---|---|
+| ![A lava hall](docs/images/lava-hall.jpg) | ![A lit corridor](docs/images/lit-corridor.jpg) |
+| ![A cave with lava](docs/images/lava-cave.jpg) | ![A pillared room](docs/images/pillared-room.jpg) |
+| ![The level from straight above](docs/images/map-plan-view.jpg) | ![A star-shaped courtyard](docs/images/star-map-from-above.jpg) |

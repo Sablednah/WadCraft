@@ -1,5 +1,7 @@
 # WadCraft
 
+![WadCraft](https://raw.githubusercontent.com/Sablednah/WadCraft/main/src/main/resources/wadcraft.png)
+
 **Walk into E1M1.** WadCraft reads Doom WAD files and builds their maps as
 Minecraft structures, in seconds, with one command.
 
@@ -9,6 +11,8 @@ built around you: rooms, corridors, stairs, windows, outdoor yards, the lot.
 
 **Server-side only.** WadCraft places ordinary blocks, so players with an
 unmodded client see everything it builds. Nothing to install on the client.
+
+![A whole Doom level, built in Minecraft](https://raw.githubusercontent.com/Sablednah/WadCraft/main/docs/images/map-from-above.jpg)
 
 ---
 
@@ -39,6 +43,16 @@ unmodded client see everything it builds. Nothing to install on the client.
 - **Undo.** `/wadcraft undo` puts back whatever your last build replaced.
 
 ---
+
+![A lava hall](https://raw.githubusercontent.com/Sablednah/WadCraft/main/docs/images/lava-hall.jpg)
+
+![A lit corridor](https://raw.githubusercontent.com/Sablednah/WadCraft/main/docs/images/lit-corridor.jpg)
+
+![A cave with lava](https://raw.githubusercontent.com/Sablednah/WadCraft/main/docs/images/lava-cave.jpg)
+
+![A pillared room](https://raw.githubusercontent.com/Sablednah/WadCraft/main/docs/images/pillared-room.jpg)
+
+![A star-shaped courtyard, from above](https://raw.githubusercontent.com/Sablednah/WadCraft/main/docs/images/star-map-from-above.jpg)
 
 ## Commands
 
