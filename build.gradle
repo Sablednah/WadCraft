@@ -94,3 +94,31 @@ neoForge.ideSyncTask generateModMetadata
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
+
+// Build stamp, as in LegendQuest: the jar records the commit it came from,
+// because two builds of one version share a filename and only this tells them apart.
+// Tolerant of git being absent; an unknown stamp never fails a build.
+static String gitOut(File dir, String... args) {
+    try {
+        var proc = new ProcessBuilder(args).directory(dir).redirectErrorStream(true).start()
+        var out = proc.inputStream.text.trim()
+        return proc.waitFor() == 0 && !out.isEmpty() ? out : null
+    } catch (Exception ignored) {
+        return null
+    }
+}
+var buildCommit = gitOut(projectDir, "git", "rev-parse", "--short=8", "HEAD") ?: "unknown"
+var buildBranch = gitOut(projectDir, "git", "rev-parse", "--abbrev-ref", "HEAD") ?: "unknown"
+if (gitOut(projectDir, "git", "status", "--porcelain")) buildCommit += "-dirty"
+logger.lifecycle("Build stamp: ${buildCommit} on ${buildBranch}")
+
+tasks.named('jar', Jar) {
+    manifest {
+        attributes([
+                "Implementation-Title"  : mod_name,
+                "Implementation-Version": mod_version,
+                "Build-Commit"          : buildCommit,
+                "Build-Branch"          : buildBranch,
+        ])
+    }
+}
