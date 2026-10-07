@@ -7,6 +7,17 @@ issueTrackerURL="https://github.com/Sablednah/WadCraft/issues"
 modId="${mod_id}"
 version="${mod_version}"
 displayName="${mod_name}"
+# Artwork, declared three ways as in LegendQuest; older loaders ignore keys they do not know.
+#   iconFile   - the small square beside the name in the list (26.2+)
+#   bannerFile - the wide image in the info panel (26.2+)
+#   logoFile   - what 1.21.x and 26.1 show, and 26.2's fallback
+# Cut from the originals in art/ with their black backgrounds cleared. Smoothed,
+# because this is detailed artwork scaled down, and point sampling shreds it.
+iconFile="wadcraft-icon.png"
+bannerFile="wadcraft.png"
+logoFile="wadcraft.png"
+logoBlur=true
+iconBlur=true
 authors="${mod_authors}"
 description='''
 ${mod_description}
