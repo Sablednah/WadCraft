@@ -62,6 +62,15 @@ below 26.3.0.37-beta). **Docs live on `main`**; port forwards.
 - `~/rig/wad-verify.sh <branch>` on Vivo (fed `git archive`) boots a server,
   builds Freedoom's E1M1 from the console and probes the result. Do not poll
   with `/wadcraft cancel`: it stops a running build.
+  - **Probe before and after, in a fixed-seed world.** The first version
+    counted solid blocks after the build, so terrain counted too. Runs with
+    random seeds gave 9, 9, 53 and 9 for the same code. With the seed fixed
+    and before-and-after compared, all four versions changed the same 19 of
+    245 points.
+  - **Sable previews maps in a void flat world**, or one with 1 grass, 5 dirt,
+    100 stone and bedrock. In a void world anything solid is WadCraft's, so
+    that is the cleaner test bed.
+  - The force-load limit is 256 chunks: `-128 -128 127 127` is exactly that.
 
 ## Build
 
