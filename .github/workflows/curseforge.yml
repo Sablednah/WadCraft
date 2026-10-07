@@ -1,0 +1,198 @@
+name: Publish to CurseForge
+
+# Publishing a GitHub release publishes to CurseForge too. Every jar attached to the release is
+# uploaded, with the release body used as the changelog.
+#
+# JARS ONLY, deliberately: a CurseForge mod project accepts jar/litemod and nothing else, and the
+# upload API returns HTTP 200 for anything else and lets moderation reject it later. Copied from
+# LegendQuest, which learned that the hard way (its CLAUDE.md, "Releasing").
+#
+# Setup, once:
+#   1. Create an API token at https://legacy.curseforge.com/account/api-tokens
+#   2. Add it as the repository secret CURSEFORGE_TOKEN
+#      (Settings -> Secrets and variables -> Actions -> New repository secret)
+#   3. Add the numeric project ID, shown on the CurseForge project page, as the repository
+#      variable CURSEFORGE_PROJECT_ID (same screen, "Variables" tab)
+#
+# The CurseForge project must already exist - the upload API can only add files to one; it has no
+# create-project endpoint.
+#
+# Until the secret exists this workflow skips rather than fails, so it will not redden the release.
+
+on:
+  release:
+    types: [published]
+  # Re-upload an existing release by hand, e.g. after fixing a changelog, or to publish a release
+  # that was tagged before this workflow existed.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to upload (e.g. v2.0.1)
+        required: true
+      release_type:
+        description: CurseForge release type
+        required: false
+        default: release
+        type: choice
+        options: [release, beta, alpha]
+      debug:
+        description: Print the upload metadata (contains no credentials)
+        required: false
+        default: false
+        type: boolean
+      pattern:
+        description: "Which attached jars to upload, as a glob - e.g. one file that failed. Must end .jar"
+        required: false
+        default: '*.jar'
+        type: string
+      minimal:
+        description: "Diagnostic: upload with a one-line changelog and only the MC+loader tags"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  # Did anybody update the store description for this release?
+  #
+  # A SEPARATE JOB on purpose: it must not block the upload. The artifacts are
+  # what people are waiting for, and holding them hostage over documentation
+  # would just teach everyone to re-run the workflow without reading it. This
+  # fails on its own, puts a red mark on the release, and leaves the files to
+  # ship regardless.
+  #
+  # It exists because CURSEFORGE.md went three releases out of date without
+  # anyone noticing -- advertising one Minecraft version when there were three,
+  # and none of the features added in between. "Check it when it feels stale"
+  # is not a mechanism; this is.
+  #
+  # A release that genuinely needs no description change says so in its notes:
+  # put [no-store-update] anywhere in the release body and this passes.
+  store-copy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tags and history, to diff against the last release
+
+      - name: Was CURSEFORGE.md updated since the previous release?
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          BODY: ${{ github.event.release.body }}
+        run: |
+          if printf '%s' "$BODY" | grep -qF '[no-store-update]'; then
+            echo "Release notes say [no-store-update] - skipping."
+            exit 0
+          fi
+          # The tag before this one BY ANCESTRY. Sorting tags by version and
+          # taking the highest that is not this one looks equivalent and is
+          # not: run against an older tag it picks a NEWER one as "previous"
+          # and diffs backwards. Verified against real history -- this
+          # correctly flags v2.2.1 and v2.3.0, the two releases whose store
+          # copy really did go stale, and passes the three that updated it.
+          prev="$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)"
+          if [ -z "$prev" ]; then
+            echo "No previous tag to compare against - nothing to check."
+            exit 0
+          fi
+          echo "Comparing $prev..$TAG"
+          if git diff --name-only "$prev".."$TAG" -- CURSEFORGE.md docs/store-copy.md | grep -q .; then
+            echo "Store copy was updated for this release."
+            exit 0
+          fi
+          echo "::error::CURSEFORGE.md has not changed since $prev."
+          echo "The store description is what people read before downloading, and it is the"
+          echo "easiest thing in the repo to forget. Update CURSEFORGE.md (and docs/store-copy.md"
+          echo "if the metadata moved), or add [no-store-update] to the release notes if this"
+          echo "release genuinely does not change anything a reader would care about."
+          exit 1
+
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the CurseForge token is configured
+        id: guard
+        env:
+          TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+          PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$PROJECT_ID" ]; then
+            echo "CURSEFORGE_TOKEN secret or CURSEFORGE_PROJECT_ID variable not set - skipping."
+            echo "See the comments at the top of .github/workflows/curseforge.yml for setup."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.guard.outputs.configured == 'true'
+
+      - name: Download the release artifacts and changelog
+        if: steps.guard.outputs.configured == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          # A re-run re-uploads everything by default, and CurseForge dedupes by content: files that
+          # already went up are rejected in moderation, where nobody looks. So a single failed file
+          # is retried on its own. Still jars only, whatever is typed here.
+          PATTERN: ${{ inputs.pattern || '*.jar' }}
+        run: |
+          case "$PATTERN" in
+            *.jar) ;;
+            *) echo "::error::pattern must end in .jar (got '$PATTERN') - CurseForge rejects anything else after a 200."; exit 1 ;;
+          esac
+          mkdir -p dist
+          # Jars only - see the header. The genre pack ZIPs are deliberately not fetched.
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$PATTERN" --dir dist
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' > dist/changelog.md
+          ls -la dist
+
+      - name: Upload each artifact
+        if: steps.guard.outputs.configured == 'true'
+        env:
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+          CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+          # What each uploaded file depends on: nothing. WadCraft is a standalone library.
+          # The format, if that changes, is slug[=projectID]:type,... (see the upload script).
+          CURSEFORGE_RELATIONS: ""
+          RELEASE_TYPE: ${{ inputs.release_type || 'release' }}
+          CURSEFORGE_DEBUG: ${{ inputs.debug && '1' || '' }}
+          CURSEFORGE_MINIMAL: ${{ inputs.minimal && '1' || '' }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          shopt -s nullglob
+          # WadCraft's own jars, and NOTHING ELSE. No WAD is ever attached to a release (CLAUDE.md). The CurseForge app pulls a required dependency in
+          # as the project's newest approved file for the Minecraft version, whatever it is called,
+          # so a stray jar here becomes what other mods install (LegendQuest, 2026-09-16).
+          ordered=(dist/wadcraft-*.jar)
+          if [ ${#ordered[@]} -eq 0 ]; then
+            echo "::error::No jars attached to the release - nothing to upload."
+            exit 1
+          fi
+          export RELEASE_VERSION="${TAG#v}"
+          failed=0
+          for file in "${ordered[@]}"; do
+            echo "::group::$(basename "$file")"
+            # Each jar names the Minecraft version it was built for
+            # (legendquest-2.2.1+mc26.2.jar), because one release now carries a jar per version
+            # branch. Take the version from there rather than from gradle.properties: this
+            # workflow runs from whichever ref was tagged, so gradle.properties describes ONE of
+            # the three and would label the other two as that version. A 26.2 jar listed under
+            # 1.21.11 is worse than no upload -- it is a download that cannot possibly work.
+            # An untagged jar (the 1.21.11 line, and the example pack) falls back to
+            # gradle.properties, which is correct for it.
+            case "$(basename "$file")" in
+              *+mc*.jar) mc="$(basename "$file" | sed -n 's/.*+mc\([0-9.]*\)\.jar$/\1/p')" ;;
+              *)         mc="" ;;
+            esac
+            echo ">> Minecraft version for this file: ${mc:-<from gradle.properties>}"
+            # Keep going if one fails, so a single bad upload does not strand the others, then fail
+            # the job at the end so the failure is not silent.
+            # Invoked via bash rather than as ./script: this repo lives on an NTFS drive with
+            # core.fileMode=false, so exec bits are easily lost again on a future commit.
+            bash scripts/curseforge-upload.sh "$file" dist/changelog.md "$mc" "$RELEASE_TYPE" || failed=1
+            echo "::endgroup::"
+          done
+          [ "$failed" -eq 0 ] || { echo "::error::At least one upload failed."; exit 1; }

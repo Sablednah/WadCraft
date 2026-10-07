@@ -3,7 +3,7 @@
 All notable changes to WadCraft are recorded here.
 This project follows [Semantic Versioning](https://semver.org/).
 
-## 0.1.0 (unreleased)
+## 0.1.0 — 2026-10-07
 
 The first version, for Minecraft 1.21.11 on NeoForge.
 

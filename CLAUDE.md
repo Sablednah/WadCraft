@@ -15,7 +15,7 @@ template.
 
 ## Where it stands (2026-10-05)
 
-**0.1.0, unreleased, judged "an acceptable WAD library" by Sable** after testing
+**0.1.0, released 2026-10-07, judged "an acceptable WAD library" by Sable** after testing
 E1M1 and E1M2 in his own instance: walls show, and the texture-to-block
 matching was right from the start. Remaining gaps are those of a 1-block
 (0.5 with slabs) rendering of a 2.5D map, plus the "Not yet" list.
@@ -24,7 +24,7 @@ matching was right from the start. Remaining gaps are those of a 1-block
   LegendQuest's branch-per-version rule. The `neoforge` package is the part
   that will need porting; `wad` and `build` have no Minecraft imports.
 - Public repo: https://github.com/Sablednah/WadCraft. No CurseForge project
-  yet; `CURSEFORGE.md` is the drafted description. No release workflow yet.
+  yet; `CURSEFORGE.md` is the drafted description. A release workflow (from LegendQuest's, via CrawlSpace) uploads `wadcraft-*.jar` when a GitHub release is published.
 - Store screenshots are in `screenshots/` (gitignored), taken on the Vivo rig:
   E1M1 hangar, nukage, lava cave, armour stairs and aerial; E1M2 windows and
   aerial; E1M8 pentagram; freedoom E1M1 aerial. Several show id's shareware
