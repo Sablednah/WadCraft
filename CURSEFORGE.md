@@ -121,5 +121,5 @@ rotation and be told when it finishes. The source and an example are on GitHub.
 
 ---
 
-For Minecraft 1.21.11, 26.1.2, 26.2 and 26.3 on NeoForge. MIT licensed.
+For Minecraft 1.21.11, 26.1.2, 26.2 and 26.3 on NeoForge. On 26.3, version 0.1.1 needs NeoForge 26.3.0.58-beta or newer. MIT licensed.
 Source: https://github.com/Sablednah/WadCraft
